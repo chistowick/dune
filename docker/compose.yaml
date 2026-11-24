@@ -1,0 +1,67 @@
+services:
+    app:
+        build:
+            context: ./../
+            dockerfile: ./docker/app/Dockerfile
+            args:
+                - PUID=${PUID}
+                - PGID=${PGID}
+                - PHP_FPM_PORT=${PHP_FPM_PORT}
+                - NODE_PORT=${NODE_PORT}
+        user: "${PUID}:${PGID}"
+        restart: unless-stopped
+        volumes:
+            - ./../:/var/www/html
+            - ./app/php-fpm/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+            - ./app/php-fpm/conf.d/error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
+        extra_hosts:
+            - host.docker.internal:host-gateway
+        ports:
+            - ${NODE_PORT}:5173
+        environment:
+            - NPM_CONFIG_CACHE=/tmp/.npm-cache
+            - COMPOSER_CACHE_DIR=/tmp/.composer-cache
+        depends_on:
+            - rabbitmq
+
+    nginx:
+        image: nginx:stable-alpine
+        restart: unless-stopped
+        ports:
+            - ${NGINX_HOST_HTTP_PORT}:80
+        volumes:
+            - ./nginx/conf/default.conf:/etc/nginx/conf.d/default.conf:ro
+            - ./../:/var/www/html
+        depends_on:
+            - app
+            - db
+
+    db:
+        image: postgres:14.15
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${POSTGRES_DB}
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            TZ: Europe/Moscow
+        ports:
+            - ${POSTGRES_PORT}:5432
+        volumes:
+            - dune_postgres_data:/var/lib/postgresql/data/
+
+    rabbitmq:
+        image: rabbitmq:4-management
+        restart: unless-stopped
+        environment:
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+            TZ: Europe/Moscow
+        ports:
+            - ${RABBITMQ_AMQP_PORT}:5672
+            - ${RABBITMQ_WEB_UI_PORT}:15672
+        volumes:
+          - dune_rabbitmq_data:/var/lib/rabbitmq/
+
+volumes:
+    dune_postgres_data:
+    dune_rabbitmq_data:
